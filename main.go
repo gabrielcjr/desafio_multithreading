@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -23,80 +24,74 @@ type ViaCEP struct {
 }
 
 type ApiCep struct {
-	Status   int    `json:"status"`
-	Code     string `json:"code"`
-	State    string `json:"state"`
-	City     string `json:"city"`
-	District string `json:"district"`
-	Address  string `json:"address"`
+	Status     int    `json:"status"`
+	Code       string `json:"code"`
+	State      string `json:"state"`
+	Localidade string `json:"city"`
+	District   string `json:"district"`
+	Address    string `json:"address"`
 }
 
 func main() {
 
-	c1 := make(chan int)
-	c2 := make(chan int)
+	c1 := make(chan interface{})
+	c2 := make(chan interface{})
+	cep := "44007-200"
 
 	go func() {
-		BuscaCep("viacep", "40301110")
-		c1 <- 1
+		result := BuscaCep("http://viacep.com.br/ws/" + cep + "/json/")
+		c1 <- result
 	}()
 
 	go func() {
-		BuscaCep("apicep", "40301-110")
-		c2 <- 2
+		result := BuscaCep("https://cdn.apicep.com/file/apicep/" + cep + ".json")
+		c2 <- result
 	}()
 
 	select {
 	case msg1 := <-c1:
-		println("received from Viacep", msg1)
+		println("received from Viacep\n Cidade:", msg1)
 	case msg2 := <-c2:
-		println("received from Apicep", msg2)
+		println("received from Apicep\n Cidade:", msg2)
 	case <-time.After(time.Second):
 		println("timeout")
 	}
 
 }
 
-func BuscaCep(site string, cep string) {
+func BuscaCep(url string) interface{} {
 	start := time.Now()
-
-	var req *http.Response
-	var err error
-	if site == "viacep" {
-		req, err = http.Get("http://viacep.com.br/ws/" + cep + "/json/")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Erro ao fazer requisição: %v\n", err)
-		}
-	}
-	if site == "apicep" {
-		req, err = http.Get("https://cdn.apicep.com/file/apicep/" + cep + ".json")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Erro ao fazer requisição: %v\n", err)
-		}
+	req, err := http.Get(url)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Erro ao fazer requisição: %v\n", err)
 	}
 	defer req.Body.Close()
 	res, err := io.ReadAll(req.Body)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Erro ao ler resposta: %v\n", err)
 	}
-	if site == "viacep" {
+	result := findApiData(url, res)
+	elapsed := time.Since(start)
+	fmt.Printf("%s execution took %s\n", url, elapsed)
+	return result
+}
+
+func findApiData(url string, res []byte) {
+	if strings.Contains(url, "viacep.com.br") {
 		var data ViaCEP
-		err = json.Unmarshal(res, &data)
+		err := json.Unmarshal(res, &data)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Erro ao fazer parse da resposta: %v\n", err)
 		}
-		fmt.Println("Cidade: ", data.Localidade)
-		elapsed := time.Since(start)
-		fmt.Printf("This execution took %s\n", elapsed)
+		return data
 	}
-	if site == "apicep" {
+	if strings.Contains(url, "cdn.apicep.com") {
 		var data ApiCep
-		err = json.Unmarshal(res, &data)
+		err := json.Unmarshal(res, &data)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Erro ao fazer parse da resposta: %v\n", err)
 		}
-		fmt.Println("Cidade: ", data.City)
-		elapsed := time.Since(start)
-		fmt.Printf("This execution took %s\n", elapsed)
+		return data
 	}
+	return nil
 }
