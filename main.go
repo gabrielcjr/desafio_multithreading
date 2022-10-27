@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-type ViaCEP struct {
+type ViaCep struct {
 	Cep         string `json:"cep"`
 	Logradouro  string `json:"logradouro"`
 	Complemento string `json:"complemento"`
@@ -32,38 +32,46 @@ type ApiCep struct {
 }
 
 type BuscasCep struct {
-	ViaCEP
+	ViaCep
 	ApiCep
+}
+
+type AdapterInterface interface {
+	buscaCep(cep string)
 }
 
 func main() {
 
-	c1 := make(chan interface{})
-	c2 := make(chan interface{})
+	c1 := make(chan struct{})
+	c2 := make(chan struct{})
 	cep := "44007-200"
 
+	buscaCep := new(BuscasCep)
+
 	go func() {
-		result := BuscasCep.BuscaCep("http://viacep.com.br/ws/" + cep + "/json/")
+		result := buscaCep.BuscaVia("http://viacep.com.br/ws/" + cep + "/json/")
+		fmt.Print(result)
 		c1 <- result
 	}()
 
 	go func() {
-		result := BuscasCep.BuscaApiCep("https://cdn.apicep.com/file/apicep/" + cep + ".json")
+		result := buscaCep.BuscaApi("https://cdn.apicep.com/file/apicep/" + cep + ".json")
+		fmt.Print(result)
 		c2 <- result
 	}()
 
 	select {
 	case msg1 := <-c1:
-		println("received from Viacep\n Cidade:", msg1)
+		fmt.Println("received from Viacep\n Cidade:", msg1)
 	case msg2 := <-c2:
-		println("received from Apicep\n Cidade:", msg2)
+		fmt.Println("received from Apicep\n Cidade:", msg2)
 	case <-time.After(time.Second):
 		println("timeout")
 	}
 
 }
 
-func (b *BuscasCep) BuscaViaCep(url string) interface{} {
+func (b *BuscasCep) BuscaVia(adapter AdapterInterface) struct{} {
 	start := time.Now()
 	req, err := http.Get(url)
 	if err != nil {
@@ -74,57 +82,52 @@ func (b *BuscasCep) BuscaViaCep(url string) interface{} {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Erro ao ler resposta: %v\n", err)
 	}
-	data := []byte{}
+	var data struct{}
 	err = json.Unmarshal(res, &data)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Erro ao fazer parse da resposta: %v\n", err)
 	}
 	elapsed := time.Since(start)
 	fmt.Printf("%s execution took %s\n", url, elapsed)
+	fmt.Print(data)
 	return data
 }
 
-func (b *BuscasCep) BuscaApiCep(url string) interface{} {
-	start := time.Now()
-	req, err := http.Get(url)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Erro ao fazer requisição: %v\n", err)
-	}
-	defer req.Body.Close()
-	res, err := io.ReadAll(req.Body)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Erro ao ler resposta: %v\n", err)
-	}
-	var data ApiCep
-	err = json.Unmarshal(res, &data)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Erro ao fazer parse da resposta: %v\n", err)
-	}
-	elapsed := time.Since(start)
-	fmt.Printf("%s execution took %s\n", url, elapsed)
-	return data
+func (v *ViaCep) buscaCep(cep string) {
+
 }
 
-// func (b *BuscasCep) findApiData(url string, res []byte) FindInterface {
-// 	if strings.Contains(url, "viacep.com.br") {
-// 		var data ViaCEP
-// 		err := json.Unmarshal(res, &data)
-// 		if err != nil {
-// 			fmt.Fprintf(os.Stderr, "Erro ao fazer parse da resposta: %v\n", err)
-// 		}
-// 		return data
+// func (b *BuscasCep) BuscaApiCep(url string) struct{} {
+// 	start := time.Now()
+// 	req, err := http.Get(url)
+// 	if err != nil {
+// 		fmt.Fprintf(os.Stderr, "Erro ao fazer requisição: %v\n", err)
 // 	}
-// 	if strings.Contains(url, "cdn.apicep.com") {
-// 		var data ApiCep
-// 		err := json.Unmarshal(res, &data)
-// 		if err != nil {
-// 			fmt.Fprintf(os.Stderr, "Erro ao fazer parse da resposta: %v\n", err)
-// 		}
-// 		return data
+// 	defer req.Body.Close()
+// 	res, err := io.ReadAll(req.Body)
+// 	if err != nil {
+// 		fmt.Fprintf(os.Stderr, "Erro ao ler resposta: %v\n", err)
 // 	}
-// 	return nil
+// 	var data struct{}
+// 	err = json.Unmarshal(res, &data)
+// 	if err != nil {
+// 		fmt.Fprintf(os.Stderr, "Erro ao fazer parse da resposta: %v\n", err)
+// 	}
+// 	elapsed := time.Since(start)
+// 	fmt.Printf("%s execution took %s\n", url, elapsed)
+// 	return data
 // }
 
-// type FindInterface interface {
-// 	findApiData()
+// cria uma interface q entra na funcao
+// func consultaCep(adapter AdapterInterface) {.....
+// type AdapterInterface interface {
+//   buscaCep(cep string).....
 // }
+// type VIACEP struct {
+// //....
+// }
+
+// func (v *VIACEP) buscaCep(cep string)
+
+// viacep := NeViaCEP()
+// buscaCep(viacep)
