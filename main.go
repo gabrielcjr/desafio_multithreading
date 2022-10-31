@@ -31,33 +31,27 @@ type ApiCep struct {
 	Address    string `json:"address"`
 }
 
-type BuscasCep struct {
-	ViaCep
-	ApiCep
-}
-
 type AdapterInterface interface {
-	buscaCep(cep string)
+	buscaCep(url string) interface{}
 }
 
 func main() {
 
-	c1 := make(chan struct{})
-	c2 := make(chan struct{})
+	c1 := make(chan interface{})
+	c2 := make(chan interface{})
 	cep := "44007-200"
 
-	buscaCep := new(BuscasCep)
+	viaApi := new(ApiCep)
+	apiCep := new(ViaCep)
 
 	go func() {
-		result := buscaCep.BuscaVia("http://viacep.com.br/ws/" + cep + "/json/")
-		fmt.Print(result)
-		c1 <- result
+		consultaCep(viaApi, "http://viacep.com.br/ws/"+cep+"/json/")
+		c1 <- 1
 	}()
 
 	go func() {
-		result := buscaCep.BuscaApi("https://cdn.apicep.com/file/apicep/" + cep + ".json")
-		fmt.Print(result)
-		c2 <- result
+		consultaCep(apiCep, "https://cdn.apicep.com/file/apicep/"+cep+".json")
+		c2 <- 2
 	}()
 
 	select {
@@ -68,10 +62,9 @@ func main() {
 	case <-time.After(time.Second):
 		println("timeout")
 	}
-
 }
 
-func (b *BuscasCep) BuscaVia(adapter AdapterInterface) struct{} {
+func (v *ViaCep) buscaCep(url string) interface{} {
 	start := time.Now()
 	req, err := http.Get(url)
 	if err != nil {
@@ -82,52 +75,37 @@ func (b *BuscasCep) BuscaVia(adapter AdapterInterface) struct{} {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Erro ao ler resposta: %v\n", err)
 	}
-	var data struct{}
+	var data ViaCep
 	err = json.Unmarshal(res, &data)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Erro ao fazer parse da resposta: %v\n", err)
 	}
 	elapsed := time.Since(start)
 	fmt.Printf("%s execution took %s\n", url, elapsed)
-	fmt.Print(data)
 	return data
 }
 
-func (v *ViaCep) buscaCep(cep string) {
-
+func (a *ApiCep) buscaCep(url string) interface{} {
+	start := time.Now()
+	req, err := http.Get(url)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Erro ao fazer requisição: %v\n", err)
+	}
+	defer req.Body.Close()
+	res, err := io.ReadAll(req.Body)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Erro ao ler resposta: %v\n", err)
+	}
+	var data ApiCep
+	err = json.Unmarshal(res, &data)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Erro ao fazer parse da resposta: %v\n", err)
+	}
+	elapsed := time.Since(start)
+	fmt.Printf("%s execution took %s\n", url, elapsed)
+	return data
 }
 
-// func (b *BuscasCep) BuscaApiCep(url string) struct{} {
-// 	start := time.Now()
-// 	req, err := http.Get(url)
-// 	if err != nil {
-// 		fmt.Fprintf(os.Stderr, "Erro ao fazer requisição: %v\n", err)
-// 	}
-// 	defer req.Body.Close()
-// 	res, err := io.ReadAll(req.Body)
-// 	if err != nil {
-// 		fmt.Fprintf(os.Stderr, "Erro ao ler resposta: %v\n", err)
-// 	}
-// 	var data struct{}
-// 	err = json.Unmarshal(res, &data)
-// 	if err != nil {
-// 		fmt.Fprintf(os.Stderr, "Erro ao fazer parse da resposta: %v\n", err)
-// 	}
-// 	elapsed := time.Since(start)
-// 	fmt.Printf("%s execution took %s\n", url, elapsed)
-// 	return data
-// }
-
-// cria uma interface q entra na funcao
-// func consultaCep(adapter AdapterInterface) {.....
-// type AdapterInterface interface {
-//   buscaCep(cep string).....
-// }
-// type VIACEP struct {
-// //....
-// }
-
-// func (v *VIACEP) buscaCep(cep string)
-
-// viacep := NeViaCEP()
-// buscaCep(viacep)
+func consultaCep(adapter AdapterInterface, url string) {
+	adapter.buscaCep(url)
+}
